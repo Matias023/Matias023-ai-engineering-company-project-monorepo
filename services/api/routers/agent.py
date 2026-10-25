@@ -6,6 +6,8 @@ from routers.rag import RAGAnswer, RAGQuestion
 from security import get_current_user, oauth2_scheme
 from models import UserResponse
 from agent_memory import AgentMemory
+from agent_guardrails import classify_input, validate_output
+from agent_tracing import record_guardrail_event
 from pydantic import BaseModel, Field
 
 router = APIRouter(
@@ -59,6 +61,25 @@ def query_agent(
             detail="La pregunta no puede estar vacía",
         )
 
+    decision = classify_input(question)
+    if decision.action != "allow":
+        category = (
+            "security" if decision.reason == "jailbreak"
+            else "structural" if decision.reason == "invalid_input"
+            else "content"
+        )
+        record_guardrail_event(
+            "input", decision.action, category, decision.reason
+        )
+        return {
+            "answer": decision.response or "Consulta no permitida.",
+            "abstained": True,
+            "reason": f"guardrail_{decision.reason}",
+            "sources": [],
+            "threshold": 0.0,
+            "memory_proposal": None,
+        }
+
     try:
         try:
             approved_memories = [
@@ -78,6 +99,21 @@ def query_agent(
             status_code=503,
             detail="El agente no está disponible",
         ) from None
+
+    output_decision = validate_output(result)
+    if output_decision.action != "allow":
+        record_guardrail_event(
+            "output", "reject",
+            output_decision.reason, output_decision.reason,
+        )
+        return {
+            "answer": "No puedo entregar esta respuesta de forma segura.",
+            "abstained": True,
+            "reason": f"guardrail_{output_decision.reason}",
+            "sources": [],
+            "threshold": 0.0,
+            "memory_proposal": None,
+        }
 
     from agent_memory_evaluator import evaluate_memory_candidate
 
