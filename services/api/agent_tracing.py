@@ -158,6 +158,56 @@ def run_traced(
         raise
 
 
+
+def record_guardrail_event(direction, action, category, reason,
+                           trace_file=TRACE_FILE):
+    """Registra únicamente metadatos permitidos del guardrail."""
+    allowed_directions = {"input", "output"}
+    allowed_actions = {"reject", "redirect"}
+    allowed_categories = {"structural", "content", "security"}
+    allowed_reasons = {
+        "invalid_input", "jailbreak", "personal_task", "casual",
+        "structural", "content", "security",
+    }
+
+    if (
+        direction not in allowed_directions
+        or action not in allowed_actions
+        or category not in allowed_categories
+        or reason not in allowed_reasons
+    ):
+        raise ValueError("Evento de guardrail no permitido")
+
+    _write_event(trace_file, {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "event": "guardrail_decision",
+        "direction": direction,
+        "action": action,
+        "category": category,
+        "reason": reason,
+    })
+
+
+def summarize_guardrail_events(trace_file=TRACE_FILE):
+    """Devuelve los conteos agrupados por categoría."""
+    counts = {"structural": 0, "content": 0, "security": 0}
+    path = Path(trace_file)
+
+    if not path.is_file():
+        return counts
+
+    with path.open(encoding="utf-8") as stream:
+        for line in stream:
+            event = json.loads(line)
+            if event.get("event") != "guardrail_decision":
+                continue
+            category = event.get("category")
+            if category in counts:
+                counts[category] += 1
+
+    return counts
+
+
 def read_trace(run_id, trace_file=TRACE_FILE):
     """Consulta únicamente los eventos de una corrida."""
     path = Path(trace_file)
