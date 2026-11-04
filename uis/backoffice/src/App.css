@@ -10,6 +10,7 @@
 
 .header {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-end;
   justify-content: space-between;
   gap: 32px;
@@ -322,7 +323,10 @@ tbody tr:hover {
 
 .header-actions {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   align-items: center;
+  max-width: 100%;
   gap: 16px;
 }
 
