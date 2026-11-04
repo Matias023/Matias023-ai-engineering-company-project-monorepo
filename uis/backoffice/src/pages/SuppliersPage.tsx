@@ -261,6 +261,8 @@ export default function SuppliersPage() {
             Incidents
           </Link>
           <Link to="/rag" className="secondary-button nav-link">Asistente RAG</Link>
+          <Link to="/reporting" className="secondary-button nav-link">Reporting</Link>
+          <Link to="/backoffice/rfp" className="secondary-button nav-link">Tickets RFP</Link>
           <Link to="/account/profile" className="secondary-button nav-link">
             Profile
           </Link>

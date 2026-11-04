@@ -20,7 +20,7 @@ export async function getWeeklyWarehouseClientPerformance(
   if (weekStart) params.set('week_start', weekStart)
   const query = params.toString()
   const response = await authFetch(
-    `/reporting/weekly-warehouse-client-performance${query ? `?${query}` : ''}`,
+    `/api/reporting/weekly-warehouse-client-performance${query ? `?${query}` : ''}`,
     { requireAuth: true },
   )
   if (!response.ok) {
