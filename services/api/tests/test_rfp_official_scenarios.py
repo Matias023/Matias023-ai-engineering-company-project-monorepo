@@ -70,6 +70,7 @@ def test_official_scenario_commercial_to_final_document(
 
     ticket_id = str(uuid4())
     rfp_id = str(uuid4())
+    owner_uuid = str(uuid4())
     departments = list(metrics)
 
     try:
@@ -84,6 +85,7 @@ def test_official_scenario_commercial_to_final_document(
                     RFPTicket(
                         ticket_id=ticket_id,
                         rfp_id=rfp_id,
+                        owner_uuid=owner_uuid,
                         status="esperando_aprobación",
                         raw_pdf_path=f"test-only/{scenario}.pdf",
                     )
@@ -181,8 +183,9 @@ def test_official_scenario_commercial_to_final_document(
 
             result = router.finalize_rfp_ticket(
                 ticket_id,
-                _user=SimpleNamespace(
+                user=SimpleNamespace(
                     email="integration@test.invalid",
+                    uuid=owner_uuid,
                     is_active=True,
                 ),
             )
@@ -194,6 +197,7 @@ def test_official_scenario_commercial_to_final_document(
                 ticket_id,
                 _user=SimpleNamespace(
                     email="integration@test.invalid",
+                    uuid=owner_uuid,
                     is_active=True,
                 ),
             )

@@ -4,6 +4,7 @@ from pathlib import Path
 import sys
 
 from celery_app import celery_app
+from google.genai.errors import ServerError
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -181,7 +182,14 @@ def classify_rfp_document(
     }
 
 
-@celery_app.task(name="tasks.rfp_intake.analyze_rfp_department")
+@celery_app.task(
+    name="tasks.rfp_intake.analyze_rfp_department",
+    autoretry_for=(ServerError,),
+    retry_kwargs={"max_retries": 3},
+    retry_backoff=2,
+    retry_backoff_max=60,
+    retry_jitter=True,
+)
 def analyze_rfp_department(
     ticket_id: str,
     department_id: str,
