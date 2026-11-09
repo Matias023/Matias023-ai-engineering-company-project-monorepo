@@ -12,6 +12,7 @@ from sqlmodel import Session, select
 import agent_tracing
 import database
 import routers.rfp_intake as router
+import rfp_approval_service as approval_service
 
 from data.pipelines.rfp_intake.rfp_approval_graph import APPROVERS
 from rfp_models import (
@@ -133,6 +134,12 @@ def test_official_scenario_commercial_to_final_document(
 
         with (
             patch.object(router, "get_engine", return_value=engine),
+            patch.object(approval_service, "get_engine", return_value=engine),
+            patch.object(
+                approval_service,
+                "_checkpoint_path",
+                return_value=tmp_path / "rfp-approval.sqlite",
+            ),
             patch.object(
                 agent_tracing,
                 "TRACE_FILE",
@@ -176,10 +183,28 @@ def test_official_scenario_commercial_to_final_document(
                         assert verified[response["metric"]] == value
                         assert verified["confirmed_by"] == user.email
 
-                        section.approval_status = "approved"
-                        section.approver = APPROVERS[department]
-                        section.approved_at = utcnow()
-                        session.add(section)
+                started = approval_service.start_approval(
+                    ticket_id, department
+                )
+                assert started["approval_status"] == "pending"
+
+                decided = approval_service.decide_approval(
+                    ticket_id, department, "approve", None
+                )
+                assert decided["approval_status"] == "approved"
+
+                with Session(engine) as approval_session:
+                    approved_section = approval_session.exec(
+                        select(RFPDepartmentSection).where(
+                            RFPDepartmentSection.ticket_id == ticket_id,
+                            RFPDepartmentSection.department_id == department,
+                        )
+                    ).one()
+                    assert approved_section.approval_status == "approved"
+                    assert approved_section.approved_at is not None
+                    assert approved_section.evaluation_results[
+                        "human_decision"
+                    ] == "approve"
 
             result = router.finalize_rfp_ticket(
                 ticket_id,
