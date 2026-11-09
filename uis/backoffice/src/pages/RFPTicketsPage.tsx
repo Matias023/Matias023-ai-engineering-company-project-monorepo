@@ -9,6 +9,7 @@ import {
   finalizeRFP,
   downloadFinalRFP,
   regenerateRFPDepartment,
+  retryFailedRFPGeneration,
   startRFPGeneration,
   startRFPApproval,
   submitRFPApproval,
@@ -81,6 +82,28 @@ export default function RFPTicketsPage() {
         err instanceof Error
           ? err.message
           : 'Error al iniciar generación RFP',
+      )
+    } finally {
+      setApprovalBusy(false)
+    }
+  }
+
+  async function handleTechnicalRetry(departmentId: string) {
+    if (!selected || selected.status !== 'generando_borrador') return
+
+    const ticketId = selected.ticket_id
+    setApprovalBusy(true)
+    setError(null)
+
+    try {
+      await retryFailedRFPGeneration(ticketId, departmentId)
+      await openTicket(ticketId)
+      await refresh()
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Error al reintentar la generación',
       )
     } finally {
       setApprovalBusy(false)
@@ -577,6 +600,20 @@ export default function RFPTicketsPage() {
               }}
             >
               <h3>{section.department_id}</h3>
+
+              {selected.status === 'generando_borrador' &&
+                section.evaluation_results?.generation_status === 'failed' &&
+                section.approval_status === null && (
+                  <button
+                    type="button"
+                    disabled={approvalBusy}
+                    onClick={() =>
+                      void handleTechnicalRetry(section.department_id)
+                    }
+                  >
+                    Reintentar generación
+                  </button>
+                )}
               <p>
                 <strong>Aprobación:</strong>{' '}
                 {section.approval_status || 'Pendiente / no registrada'}

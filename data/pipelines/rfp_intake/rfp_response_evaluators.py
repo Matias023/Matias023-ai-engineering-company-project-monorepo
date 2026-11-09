@@ -110,6 +110,9 @@ def evaluate_proposal(
         "metadata": metadata,
     }
 
+    from .gemini_rate_limit import wait_for_gemini_slot
+    wait_for_gemini_slot()
+
     response = client.models.generate_content(
         model=selected_model,
         contents=json.dumps(payload, ensure_ascii=False),

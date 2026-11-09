@@ -122,6 +122,9 @@ def generate_department_proposal(
         "feedback_from_previous_evaluation": feedback,
     }
 
+    from .gemini_rate_limit import wait_for_gemini_slot
+    wait_for_gemini_slot()
+
     response = client.models.generate_content(
         model=selected_model,
         contents=json.dumps(payload, ensure_ascii=False),

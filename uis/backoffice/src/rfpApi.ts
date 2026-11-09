@@ -13,6 +13,8 @@ export type RFPSection = {
   key_aspects: string[]
   draft_content: string | null
   evaluation_results: {
+    generation_status?: string
+    review_status?: string | null
     evidence?: string[]
     unconfirmed?: string[]
     verified_commercial_metrics?: {
@@ -95,6 +97,17 @@ export async function submitRFPApproval(
   await readJson<unknown>(response)
 }
 
+
+export async function retryFailedRFPGeneration(
+  ticketId: string,
+  departmentId: string,
+): Promise<void> {
+  const response = await authFetch(
+    `/api/rfp/tickets/${encodeURIComponent(ticketId)}/departments/${encodeURIComponent(departmentId)}/generation/retry`,
+    { method: 'POST' },
+  )
+  await readJson<unknown>(response)
+}
 
 export async function regenerateRFPDepartment(
   ticketId: string,

@@ -394,7 +394,7 @@ def orchestrate_rfp_departments(ticket_id: str, markdown_path: str) -> dict:
 
 
 @celery_app.task(name="tasks.rfp_intake.generate_rfp_response")
-def generate_rfp_response(ticket_id: str, department_id: str) -> dict:
+def generate_rfp_response(ticket_id: str, department_id: str, retry_reservation_id: str | None = None) -> dict:
     """Run Part 2 generator-evaluator cycle for one RFP department."""
     api_dir = PROJECT_ROOT / "services" / "api"
     if str(api_dir) not in sys.path:
@@ -461,7 +461,21 @@ def generate_rfp_response(ticket_id: str, department_id: str) -> dict:
         if section.evaluation_results.get("review_status"):
             raise ValueError("Department response already evaluated")
 
-        if section.evaluation_results.get("generation_status") == "running":
+        evaluation = section.evaluation_results or {}
+
+        if retry_reservation_id is not None:
+            if (
+                not isinstance(retry_reservation_id, str)
+                or not retry_reservation_id.strip()
+                or evaluation.get("generation_status") != "queued"
+                or evaluation.get("technical_retry_reservation_id")
+                != retry_reservation_id
+            ):
+                raise ValueError("Invalid technical retry reservation")
+        elif evaluation.get("technical_retry_reservation_id"):
+            raise ValueError("Technical retry reservation required")
+
+        if evaluation.get("generation_status") == "running":
             raise ValueError("Department generation already running")
 
         aspects = list(section.key_aspects)

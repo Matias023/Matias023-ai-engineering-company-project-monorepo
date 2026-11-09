@@ -661,6 +661,116 @@ def recover_rfp_department_dispatch(
 
 
 
+@router.post(
+    "/tickets/{ticket_id}/departments/{department_id}/generation/retry",
+    status_code=202,
+)
+def retry_failed_rfp_generation(
+    ticket_id: str,
+    department_id: str,
+    user=Depends(get_current_user),
+):
+    """Redispatch only a previously failed commercial generation."""
+    from uuid import uuid4
+    from sqlmodel import select
+    from rfp_models import RFPMetadata, RFPDepartmentSection, utcnow
+    from rfp_approval_auth import authorize_ticket_read
+    from tasks.rfp_intake import generate_rfp_response
+
+    engine = get_engine()
+    if engine.dialect.name != "postgresql":
+        raise HTTPException(503, "RFP database unavailable")
+
+    with Session(engine) as session:
+        with session.begin():
+            ticket = session.exec(
+                select(RFPTicket)
+                .where(RFPTicket.ticket_id == ticket_id)
+                .with_for_update()
+            ).one_or_none()
+
+            if ticket is None:
+                raise HTTPException(404, "RFP ticket not found")
+
+            authorize_ticket_read(user, ticket)
+
+            if ticket.status != "generando_borrador":
+                raise HTTPException(
+                    409, "Ticket is not awaiting commercial generation"
+                )
+
+            metadata = session.exec(
+                select(RFPMetadata).where(
+                    RFPMetadata.ticket_id == ticket_id
+                )
+            ).one_or_none()
+
+            if (
+                metadata is None
+                or department_id not in (metadata.departments_needed or [])
+            ):
+                raise HTTPException(404, "Inactive department")
+
+            section = session.exec(
+                select(RFPDepartmentSection).where(
+                    RFPDepartmentSection.ticket_id == ticket_id,
+                    RFPDepartmentSection.department_id == department_id,
+                ).with_for_update()
+            ).one_or_none()
+
+            if section is None:
+                raise HTTPException(404, "Department not found")
+
+            evaluation = dict(section.evaluation_results or {})
+
+            if (
+                section.approval_status is not None
+                or evaluation.get("review_status") is not None
+                or evaluation.get("generation_status") != "failed"
+            ):
+                raise HTTPException(
+                    409, "Only failed, unapproved generations can be retried"
+                )
+
+            attempts = evaluation.get("technical_retry_attempts", 0)
+
+            if type(attempts) is not int or attempts < 0:
+                raise HTTPException(409, "Invalid retry counter")
+
+            if attempts >= 3:
+                raise HTTPException(409, "Technical retry limit reached")
+
+            reservation_id = str(uuid4())
+
+            section.evaluation_results = {
+                **evaluation,
+                "generation_status": "queued",
+                "technical_retry_attempts": attempts + 1,
+                "technical_retry_reservation_id": reservation_id,
+            }
+
+            ticket.updated_at = utcnow()
+            session.add(section)
+            session.add(ticket)
+
+    try:
+        job = generate_rfp_response.delay(
+            ticket_id, department_id, reservation_id
+        )
+    except Exception as exc:
+        raise HTTPException(
+            503,
+            "Dispatch uncertain; inspect broker and worker before retry",
+        ) from exc
+
+    return {
+        "ticket_id": ticket_id,
+        "department_id": department_id,
+        "status": "generation_retry_queued",
+        "celery_task_id": job.id,
+    }
+
+
 from math import isfinite
 from pydantic import BaseModel, Field, StrictFloat, StrictInt
 
