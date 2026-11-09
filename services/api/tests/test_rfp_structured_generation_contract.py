@@ -58,6 +58,34 @@ def test_generator_requests_structured_object():
     )
 
 
+
+@pytest.mark.parametrize("department", ["warehouse", "lastmile", "reverse"])
+def test_generator_enforces_commercial_writing_instructions(department):
+    client = FakeClient({
+        "draft_content": "Propuesta sintética pendiente de confirmación.",
+        "missing_information": [],
+    })
+
+    generate_department_proposal(
+        department,
+        ["Synthetic department requirement"],
+        {
+            "client_country": "España",
+            "client_name": "Logística NovaRetail S.L.",
+        },
+        client=client,
+        model="test-model",
+    )
+
+    instructions = client.config.system_instruction
+
+    assert "Write the proposal in Spanish" in instructions
+    assert "Preserve the exact client_name" in instructions
+    assert "Keep the proposal focused on the assigned department" in instructions
+    assert "confirmed provider commitments" in instructions
+    assert "verified evidence" in instructions
+
+
 def test_generator_rejects_array_response():
     client = FakeClient([{"draft_content": "Invalid shape"}])
 

@@ -20,15 +20,36 @@ from rfp_models import (
 def test_regeneration_invalidates_stale_commercial_metrics():
     """Exercise the Celery task directly against isolated PostgreSQL."""
 
-    load_dotenv("services/api/.env")
+    import subprocess
+    from sqlalchemy.engine import URL
 
-    source = database.get_engine()
-
-    assert source.dialect.name == "postgresql"
-
-    engine = create_engine(
-        source.url.set(database="rfp_test")
+    result = subprocess.run(
+        [
+            "docker", "exec", "trackflow-rfp-pg-demo",
+            "sh", "-c",
+            'printf "%s\\n" "$POSTGRES_USER" "$POSTGRES_PASSWORD"',
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
     )
+
+    credentials = result.stdout.splitlines()
+    if len(credentials) != 2 or not all(credentials):
+        raise RuntimeError("SAFE ABORT: credenciales locales inválidas")
+
+    username, password = credentials
+
+    url = URL.create(
+        "postgresql+psycopg2",
+        username=username,
+        password=password,
+        host="127.0.0.1",
+        port=55433,
+        database="rfp_regression_test",
+    )
+
+    engine = create_engine(url, connect_args={"connect_timeout": 5})
 
     ticket_id = str(uuid.uuid4())
     rfp_id = str(uuid.uuid4())
@@ -39,7 +60,7 @@ def test_regeneration_invalidates_stale_commercial_metrics():
                 text("SELECT current_database()")
             ).scalar_one()
 
-        assert database_name == "rfp_test"
+        assert database_name == "rfp_regression_test"
 
         with Session(engine) as session:
             with session.begin():
@@ -167,7 +188,7 @@ def test_regeneration_invalidates_stale_commercial_metrics():
                     text("SELECT current_database()")
                 ).scalar_one()
 
-            if database_name != "rfp_test":
+            if database_name != "rfp_regression_test":
                 raise RuntimeError(
                     "Cleanup blocked: unexpected database"
                 )

@@ -3,6 +3,42 @@
 import re
 
 
+
+def check_client_identity(draft: str, client_name: str | None) -> list[str]:
+    """Detect explicit client-name mismatches without guessing identity."""
+    if not client_name or not isinstance(client_name, str):
+        return []
+
+    if not isinstance(draft, str) or not draft.strip():
+        return ["Empty proposal"]
+
+    import unicodedata
+
+    def normalize(value: str) -> str:
+        value = unicodedata.normalize("NFC", value)
+        return " ".join(value.casefold().split())
+
+    expected = normalize(client_name)
+
+    if expected in normalize(draft):
+        return []
+
+    # Absence alone is not proof of an incorrect identity.
+    # Only flag an explicit client declaration inconsistent with metadata.
+    pattern = re.compile(
+        r"(?im)^(?:cliente|client|destinatario|prepared for)"
+        r"\s*[:：]\s*(.+)$"
+    )
+
+    for match in pattern.finditer(draft):
+        declared = normalize(match.group(1).strip())
+
+        if declared and expected not in declared:
+            return ["Client identity mismatch"]
+
+    return []
+
+
 def check_commercial_rules(
     draft: str,
     country: str,

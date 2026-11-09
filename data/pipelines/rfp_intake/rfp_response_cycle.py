@@ -5,7 +5,7 @@ from typing import Any, Callable
 
 from .rfp_response_generator import generate_department_proposal
 from .rfp_response_evaluators import evaluate_proposal, EvaluationResult
-from .rfp_compliance import check_commercial_rules
+from .rfp_compliance import check_commercial_rules, check_client_identity
 
 EVALUATORS = ("readability", "relevance", "compliance")
 
@@ -77,6 +77,12 @@ def run_department_review(
         violations = check_commercial_rules(
             draft,
             metadata.get("client_country"),
+        )
+        violations.extend(
+            check_client_identity(
+                draft,
+                metadata.get("client_name"),
+            )
         )
 
         if violations:

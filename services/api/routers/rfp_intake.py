@@ -3,7 +3,15 @@
 from pathlib import Path
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    HTTPException,
+    Request,
+    Response,
+    UploadFile,
+)
 from fastapi.responses import StreamingResponse
 from sqlalchemy.exc import SQLAlchemyError
 from sqlmodel import Session
@@ -325,7 +333,7 @@ def start_rfp_response_generation(
     }
 
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from typing import Literal
 
 
@@ -334,6 +342,40 @@ class RFPApprovalDecisionRequest(BaseModel):
 
     decision: Literal["approve", "request_changes"]
     feedback: str | None = Field(default=None, max_length=4000)
+
+
+class RFPDepartmentReviewResponse(BaseModel):
+    """Strict whitelist of what a department approver may read."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    ticket_id: str
+    department_id: str
+    ticket_status: str
+    draft_content: str
+    generation_status: str | None = None
+    review_status: str | None = None
+    approval_status: str | None = None
+
+
+@router.get(
+    "/tickets/{ticket_id}/departments/{department_id}/review",
+    response_model=RFPDepartmentReviewResponse,
+)
+def get_department_review(
+    ticket_id: str,
+    department_id: str,
+    response: Response,
+    user=Depends(get_current_user),
+):
+    """Read-only draft of one department for its authorized approver."""
+    from rfp_approval_auth import authorize_department_approval
+    from rfp_approval_service import get_department_review as read_review
+
+    authorize_department_approval(user, department_id)
+    review = read_review(ticket_id, department_id)
+    response.headers["Cache-Control"] = "no-store"
+    return review
 
 
 @router.post(
@@ -469,6 +511,7 @@ def regenerate_rfp_department(
                 "human_decision": previous.get("human_decision"),
                 "human_feedback": feedback,
                 "human_decided_at": previous.get("human_decided_at"),
+                "draft_content": section.draft_content,
             })
 
             section.evaluation_results = {

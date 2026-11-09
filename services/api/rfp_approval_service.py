@@ -79,6 +79,72 @@ def _load_active_section(session, ticket_id, department_id):
     return ticket, section
 
 
+REVIEWABLE_TICKET_STATUSES = frozenset({
+    "needs_human_review",
+    "esperando_aprobación",
+})
+
+
+def load_department_review(session, ticket_id: str, department_id: str) -> dict:
+    """Read-only projection of one department draft for its approver.
+
+    Never locks rows, commits or mutates state. Only the whitelisted
+    fields below leave this function.
+    """
+    ticket = session.get(RFPTicket, ticket_id)
+
+    if ticket is None:
+        raise HTTPException(404, "RFP ticket not found")
+
+    metadata = session.exec(
+        select(RFPMetadata).where(RFPMetadata.ticket_id == ticket_id)
+    ).one_or_none()
+
+    if metadata is None or department_id not in (
+        metadata.departments_needed or []
+    ):
+        raise HTTPException(404, "Department is not active for this RFP")
+
+    if ticket.status not in REVIEWABLE_TICKET_STATUSES:
+        raise HTTPException(409, "Ticket is not in human review")
+
+    section = session.exec(
+        select(RFPDepartmentSection).where(
+            RFPDepartmentSection.ticket_id == ticket_id,
+            RFPDepartmentSection.department_id == department_id,
+        )
+    ).one_or_none()
+
+    if section is None or not section.draft_content:
+        raise HTTPException(409, "Department draft is not ready")
+
+    evaluation = section.evaluation_results or {}
+
+    return {
+        "ticket_id": ticket.ticket_id,
+        "department_id": section.department_id,
+        "ticket_status": ticket.status,
+        "draft_content": section.draft_content,
+        "generation_status": evaluation.get("generation_status"),
+        "review_status": evaluation.get("review_status"),
+        "approval_status": section.approval_status,
+    }
+
+
+def get_department_review(ticket_id: str, department_id: str) -> dict:
+    """Return the reviewable draft of one active department."""
+
+    if department_id not in APPROVERS:
+        raise HTTPException(404, "Unknown department")
+
+    engine = get_engine()
+    if engine.dialect.name != "postgresql":
+        raise HTTPException(503, "RFP approval requires PostgreSQL")
+
+    with Session(engine) as session:
+        return load_department_review(session, ticket_id, department_id)
+
+
 def start_approval(ticket_id: str, department_id: str) -> dict:
     """Pause one active department for its human reviewer."""
 

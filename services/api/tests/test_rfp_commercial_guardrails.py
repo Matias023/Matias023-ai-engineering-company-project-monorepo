@@ -88,3 +88,55 @@ def test_ordinary_approved_document_remains_eligible():
 
     assert document["currency"] == "EUR"
     assert len(document["sections"]) == 1
+
+
+def test_client_identity_mismatch_blocks_automatic_review():
+    from data.pipelines.rfp_intake.rfp_response_cycle import run_department_review
+    from data.pipelines.rfp_intake.rfp_response_evaluators import EvaluationResult
+
+    draft = """Cliente: Logistical NovaRetail S.L.
+Propuesta comercial de almacenamiento.
+SLA de entregas a tiempo: 98% solicitado, pendiente de confirmación.
+
+| Volumen mensual | Descuento |
+| --- | --- |
+| 1000 | 5% |
+"""
+
+    def fake_generator(department_id, key_aspects, metadata, *, feedback=None):
+        return {
+            "draft_content": draft,
+            "currency": "EUR",
+            "missing_information": [],
+        }
+
+    def fake_evaluator(name, department_id, draft_content, key_aspects, metadata):
+        return EvaluationResult(
+            evaluator=name,
+            passed=True,
+            score=1.0,
+            feedback=[],
+            violations=[],
+        )
+
+    result = run_department_review(
+        "warehouse",
+        ["Almacenamiento"],
+        {
+            "client_country": "España",
+            "client_name": "Logística NovaRetail S.L.",
+        },
+        max_iterations=1,
+        generator=fake_generator,
+        evaluator=fake_evaluator,
+    )
+
+    compliance = next(
+        item for item in result["evaluation_results"]["evaluators"]
+        if item["evaluator"] == "compliance"
+    )
+
+    assert result["review_status"] == "needs_human_review"
+    assert result["evaluation_results"]["passed"] is False
+    assert compliance["passed"] is False
+    assert "Client identity mismatch" in compliance["violations"]

@@ -9,7 +9,43 @@ sys.path.insert(0, "/app/services/api")
 
 from sqlalchemy import text
 from sqlmodel import SQLModel, Session, select
-from database import get_engine
+from unittest.mock import patch
+from database import get_engine as original_get_engine
+
+
+def get_engine():
+    import subprocess
+    from sqlalchemy import create_engine
+    from sqlalchemy.engine import URL
+
+    result = subprocess.run(
+        [
+            "docker", "exec", "trackflow-rfp-pg-demo",
+            "sh", "-c",
+            'printf "%s\\n" "$POSTGRES_USER" "$POSTGRES_PASSWORD"',
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    credentials = result.stdout.splitlines()
+    if len(credentials) != 2 or not all(credentials):
+        raise RuntimeError("SAFE ABORT: credenciales locales inválidas")
+
+    username, password = credentials
+
+    url = URL.create(
+        "postgresql+psycopg2",
+        username=username,
+        password=password,
+        host="127.0.0.1",
+        port=55433,
+        database="rfp_regression_test",
+    )
+
+    return create_engine(url, connect_args={"connect_timeout": 5})
+
 from rfp_models import RFPTicket, RFPMetadata, RFPDepartmentSection
 import data.pipelines.rfp_intake.rfp_response_cycle as cycle
 
@@ -23,7 +59,7 @@ def main():
         ).scalar_one()
 
     assert engine.dialect.name == "postgresql", engine.dialect.name
-    assert database_name == "rfp_test", (
+    assert database_name == "rfp_regression_test", (
         f"Refusing to test against unexpected database: {database_name}"
     )
     print("DATABASE ISOLATION: PASS", flush=True)
@@ -88,7 +124,8 @@ def main():
 
         from tasks.rfp_intake import generate_rfp_response
 
-        result = generate_rfp_response.run(ticket_id, "warehouse")
+        with patch("database.get_engine", return_value=engine):
+            result = generate_rfp_response.run(ticket_id, "warehouse")
 
         assert result["ticket_id"] == ticket_id
         assert result["department_id"] == "warehouse"
@@ -125,7 +162,8 @@ def main():
         print("HUMAN REVIEW STATUS: PASS", flush=True)
 
         try:
-            generate_rfp_response.run(ticket_id, "warehouse")
+            with patch("database.get_engine", return_value=engine):
+                generate_rfp_response.run(ticket_id, "warehouse")
         except ValueError:
             print("DUPLICATE PREVENTION: PASS", flush=True)
         else:
@@ -162,7 +200,7 @@ def test_generation_failure():
         ).scalar_one()
 
     assert engine.dialect.name == "postgresql"
-    assert db_name == "rfp_test", db_name
+    assert db_name == "rfp_regression_test", db_name
 
     ticket_id = str(uuid.uuid4())
     rfp_id = str(uuid.uuid4())
@@ -204,7 +242,8 @@ def test_generation_failure():
             from tasks.rfp_intake import generate_rfp_response
 
             try:
-                generate_rfp_response.run(ticket_id, "warehouse")
+                with patch("database.get_engine", return_value=engine):
+                    generate_rfp_response.run(ticket_id, "warehouse")
             except RuntimeError as exc:
                 assert str(exc) == "Simulated Gemini failure"
                 print("GENERATOR FAILURE PROPAGATION: PASS", flush=True)

@@ -54,3 +54,39 @@ def test_actual_positive_evidence_is_accepted():
         document,
         "Se requiere gestión de devoluciones",
     )
+
+
+def test_markdown_table_formatting_does_not_invalidate_evidence():
+    document = (
+        "|**Cliente solicitante:**|Logística NovaRetail S.L.|\n"
+        "|---|---|\n"
+        "|**País del cliente:**|España|"
+    )
+    assert _evidence_in_document(
+        document,
+        "Cliente solicitante: Logística NovaRetail S.L.",
+    )
+    assert _evidence_in_document(
+        document,
+        "|Cliente solicitante:|Logística NovaRetail S.L.|",
+    )
+    assert _evidence_in_document(
+        document,
+        "País del cliente: España",
+    )
+
+
+def test_markdown_table_negative_evidence_is_rejected():
+    document = (
+        "|**Cliente solicitante:**|Logística NovaRetail S.L.|\n"
+        "|---|---|\n"
+        "|**País del cliente:**|España|"
+    )
+    assert not _evidence_in_document(
+        document,
+        "Cliente solicitante: Empresa Ficticia Inexistente",
+    )
+    assert not _evidence_in_document(
+        document,
+        "País del cliente: Francia",
+    )

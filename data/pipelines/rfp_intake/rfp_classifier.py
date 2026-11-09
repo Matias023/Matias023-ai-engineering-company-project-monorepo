@@ -64,7 +64,8 @@ def _normalize_evidence(text: str) -> str:
     import re
     import unicodedata
 
-    text = re.sub(r"(?<!\\w)[*_`]+|[*_`]+(?!\\w)", "", text)
+    text = re.sub(r"\|+", " ", text)
+    text = re.sub(r"(?<!\w)[*_`]+|[*_`]+(?!\w)", "", text)
     text = unicodedata.normalize("NFKC", text).casefold()
     return " ".join(text.split())
 

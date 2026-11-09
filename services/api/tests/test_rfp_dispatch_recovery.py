@@ -18,11 +18,36 @@ from tasks.rfp_intake import generate_rfp_response
 
 
 def test_uncertain_dispatch_can_be_recovered_without_resetting_review():
-    load_dotenv("services/api/.env")
-    source = database.get_engine()
-    assert source.dialect.name == "postgresql"
+    import subprocess
+    from sqlalchemy.engine import URL
 
-    engine = create_engine(source.url.set(database="rfp_test"))
+    result = subprocess.run(
+        [
+            "docker", "exec", "trackflow-rfp-pg-demo",
+            "sh", "-c",
+            'printf "%s\\n" "$POSTGRES_USER" "$POSTGRES_PASSWORD"',
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    credentials = result.stdout.splitlines()
+    if len(credentials) != 2 or not all(credentials):
+        raise RuntimeError("SAFE ABORT: credenciales locales inválidas")
+
+    username, password = credentials
+
+    url = URL.create(
+        "postgresql+psycopg2",
+        username=username,
+        password=password,
+        host="127.0.0.1",
+        port=55433,
+        database="rfp_regression_test",
+    )
+
+    engine = create_engine(url, connect_args={"connect_timeout": 5})
     ticket_id = str(uuid.uuid4())
     rfp_id = str(uuid.uuid4())
 
@@ -30,7 +55,7 @@ def test_uncertain_dispatch_can_be_recovered_without_resetting_review():
         with engine.connect() as connection:
             assert connection.execute(
                 text("SELECT current_database()")
-            ).scalar_one() == "rfp_test"
+            ).scalar_one() == "rfp_regression_test"
 
         with Session(engine) as session:
             with session.begin():
@@ -99,6 +124,9 @@ def test_uncertain_dispatch_can_be_recovered_without_resetting_review():
 
                 assert section.approval_status is None
                 assert section.draft_content is None
+                assert section.evaluation_results["revision_history"][-1][
+                    "draft_content"
+                ] == "OLD SYNTHETIC DRAFT"
                 assert section.evaluation_results["generation_status"] == "queued"
                 assert section.evaluation_results["approval_revision"] == 1
 
@@ -148,7 +176,7 @@ def test_uncertain_dispatch_can_be_recovered_without_resetting_review():
             with engine.connect() as connection:
                 assert connection.execute(
                     text("SELECT current_database()")
-                ).scalar_one() == "rfp_test"
+                ).scalar_one() == "rfp_regression_test"
 
             with Session(engine) as session:
                 with session.begin():

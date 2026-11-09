@@ -27,12 +27,36 @@ from rfp_models import RFPTicket, RFPMetadata, RFPDepartmentSection
 def test_commercial_confirmation_authorization_and_persistence(
     monkeypatch, department, value, metric
 ):
-    load_dotenv("services/api/.env")
+    import subprocess
+    from sqlalchemy.engine import URL
 
-    source = database.get_engine()
-    assert source.dialect.name == "postgresql"
+    container = "trackflow-rfp-pg-demo"
 
-    engine = create_engine(source.url.set(database="rfp_test"))
+    result = subprocess.run(
+        [
+            "docker", "exec", container, "sh", "-c",
+            'printf "%s\\n%s\\n" "$POSTGRES_USER" "$POSTGRES_PASSWORD"',
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    credentials = result.stdout.splitlines()
+
+    if len(credentials) != 2 or not all(credentials):
+        raise RuntimeError("SAFE ABORT: invalid local PostgreSQL credentials")
+
+    engine = create_engine(
+        URL.create(
+            "postgresql+psycopg2",
+            username=credentials[0],
+            password=credentials[1],
+            host="127.0.0.1",
+            port=55433,
+            database="rfp_regression_test",
+        )
+    )
     ticket_id = str(uuid4())
     rfp_id = str(uuid4())
 
@@ -55,7 +79,7 @@ def test_commercial_confirmation_authorization_and_persistence(
         with engine.connect() as connection:
             assert connection.execute(
                 text("SELECT current_database()")
-            ).scalar_one() == "rfp_test"
+            ).scalar_one() == "rfp_regression_test"
 
         with Session(engine) as session:
             with session.begin():
@@ -143,7 +167,7 @@ def test_commercial_confirmation_authorization_and_persistence(
             with engine.connect() as connection:
                 assert connection.execute(
                     text("SELECT current_database()")
-                ).scalar_one() == "rfp_test"
+                ).scalar_one() == "rfp_regression_test"
 
             with Session(engine) as session:
                 with session.begin():
