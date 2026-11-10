@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import { useEffect, useMemo, useState } from 'react'
 import {
   getWeeklyWarehouseClientPerformance,
@@ -59,6 +60,9 @@ export default function BusinessPerformancePage() {
           <p className="subtitle">A weekly view of inbound, outbound, stockouts and inventory discrepancy by warehouse and client.</p>
           <p className="subtitle">Reporting week: <strong>{rows?.[0]?.week_start ?? 'Latest completed reporting week'}</strong></p>
         </div>
+        <Link to="/suppliers" className="secondary-button nav-link">
+          🏠 Volver al inicio
+        </Link>
       </section>
 
       {loading && <section className="state-card" role="status">Loading weekly performance…</section>}

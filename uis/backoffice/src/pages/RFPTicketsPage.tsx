@@ -1,5 +1,6 @@
 import { mergeRfpTicketSnapshot } from '../services/rfpSse'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import PageHeader from '../components/PageHeader'
 import {
   getRFPTickets,
@@ -451,7 +452,12 @@ export default function RFPTicketsPage() {
         title="TrackFlow — RFP"
         subtitle="Gestión de solicitudes y análisis departamentales"
       >
-        <span />
+        <Link
+          to="/suppliers"
+          className="secondary-button nav-link"
+        >
+          🏠 Volver al inicio
+        </Link>
       </PageHeader>
       <p>Solicitudes y análisis departamentales registrados en TrackFlow.</p>
 

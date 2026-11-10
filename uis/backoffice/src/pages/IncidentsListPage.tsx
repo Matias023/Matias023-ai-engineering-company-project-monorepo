@@ -174,7 +174,7 @@ export default function IncidentsListPage() {
             Register incident
           </Link>
           <Link to="/suppliers" className="secondary-button nav-link">
-            Suppliers
+            🏠 Volver al inicio
           </Link>
 
           <div className="supplier-count">

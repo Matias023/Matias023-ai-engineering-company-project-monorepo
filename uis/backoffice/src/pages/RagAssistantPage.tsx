@@ -29,7 +29,7 @@ const CLIENT_KEY = 'trackflow_chat_client_v1'
 const examples = [
   '¿Cómo se gestionan las devoluciones internacionales?',
   '¿Qué transportista ofrece mejor cobertura en Aragón rural?',
-  '¿Cuál es el procedimiento de seguimiento de pedidos?',
+  '¿Cuál es la política de devoluciones de TrackFlow?',
 ]
 
 function getOrCreateClientId(key: string): string {
@@ -392,7 +392,7 @@ export default function RagAssistantPage() {
           </p>
         </div>
         <Link to="/suppliers" className="secondary-button nav-link">
-          Volver a proveedores
+          🏠 Volver al inicio
         </Link>
       </section>
 

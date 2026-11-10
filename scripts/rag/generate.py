@@ -158,7 +158,47 @@ def _policy_violation(question, answer, evidence):
                 nearby,
             )
 
-            if not negated:
+            excluded_from_automation = re.search(
+                r"\bno\s+(?:estan|esta)\s+"
+                r"cubiert[ao]s?\s+por\s+"
+                r"(?:el\s+)?proceso\s*$",
+                clause,
+            )
+
+            suffix = re.split(
+                r"[.;!?]|\bpero\b|\baunque\b",
+                a[match.end():],
+                maxsplit=1,
+            )[0]
+
+            full_clause = clause + suffix
+            standard_automation = (
+                re.search(r"\bproceso\s+estandar\b", clause)
+                and not re.search(
+                    r"\binternacional\w*\b",
+                    full_clause,
+                )
+            )
+
+            sentence_before = re.split(
+                r"[.!?\n]", a[:match.start()]
+            )[-1]
+            sentence_after = re.split(
+                r"[.!?\n]", a[match.end():], maxsplit=1
+            )[0]
+            sentence = sentence_before + match.group() + sentence_after
+
+            international_scope = (
+                "internacional" in q
+                or "internacional" in sentence
+            )
+
+            if (
+                international_scope
+                and not negated
+                and not excluded_from_automation
+                and not standard_automation
+            ):
                 return "automatizacion_internacional_insegura"
 
     # Descuentos: nunca autorizar omitir aprobaciones.

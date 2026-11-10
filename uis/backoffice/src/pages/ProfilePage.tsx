@@ -59,6 +59,9 @@ export default function ProfilePage() {
             Sign out
           </button>
         </div>
+        <Link to="/suppliers" className="secondary-button nav-link">
+          🏠 Volver al inicio
+        </Link>
       </section>
 
       {message && <div className="action-message success-message">{message}</div>}
